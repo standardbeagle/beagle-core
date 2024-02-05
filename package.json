@@ -10,7 +10,7 @@
   "author": "",
   "license": "ISC",
   "workspaces": [
-    "virtual-path",
-    "virtual-path/examples/*"
+    "virtual-router",
+    "virtual-router/examples/*"
   ]
 }

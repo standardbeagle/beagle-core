@@ -1,6 +1,6 @@
 # Component Router
 
-Compoent router is a basic memory only hook base router for react. Component router does not interface or connect with the browser path at all.
+Compoent router is a basic memory only hook based router for react. Component router does not interface or connect with the browser path at all.
 
 ## Why Component Router
 
@@ -10,7 +10,7 @@ I'm a huge fan of using routing for UI state management. I think the process of 
 
 ## Getting Started
 
-``` npm i component-router ```
+``` npm i @standardbeagle/component-router ```
 
 The core of your application is the Provider which manages and shares path and route data to all its child components.
 

@@ -19,6 +19,6 @@ export interface Action<T> {
 
 export interface PathMatch extends PathData {
     isMatch: boolean,
-    remainer: string,
+    remainder: string,
 }
 

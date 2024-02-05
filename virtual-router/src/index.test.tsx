@@ -21,11 +21,11 @@ test('Provider renders basic element any path', () => {
     expect(getByText("Howdy")).toBeDefined();
 });
 
-test('Provider renders basic element any path', () => {
-    const { getByText } = render(<PathProvider path="/test">
-        <Routes>
-            <Route route="*">Howdy</Route>
-        </Routes>
-        </PathProvider>);
-    expect(getByText("Howdy")).toBeDefined();
-});
+// test('Provider renders basic element any path', () => {
+//     const { getByText } = render(<PathProvider path="/test">
+//         <Routes>
+//             <Route route="*">Howdy</Route>
+//         </Routes>
+//         </PathProvider>);
+//     expect(getByText("Howdy")).toBeDefined();
+// });
