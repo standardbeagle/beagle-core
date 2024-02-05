@@ -75,7 +75,6 @@ export function Routes(props: PropsWithChildren<RoutesProps>) : ReactElement {
     const pathContext = useContext(PathContext);
     const result: RouteRenderData[] = [];
     flattenActiveRoutes(result, children, routeContext.path, pathContext.path);
-    console.log(result, routeContext.path, pathContext.path);
 
     return <>{ result.map(({children, match}, index) => {
         return (<RouteContext.Provider key={ index } value={{ ...match }}>{children}</RouteContext.Provider>);
