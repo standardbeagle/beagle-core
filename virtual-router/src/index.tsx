@@ -43,7 +43,7 @@ export function useParams(): any {
 
 export function useSearchParams(): any {
     var { query, hash } = useContext(RouteContext);
-    return { search: new URLSearchParams(query), hash };
+    return { search: new URLSearchParams(query), hash, query };
 }
 
 export function useRouteError(): any {
@@ -82,7 +82,7 @@ export function Routes(props: PropsWithChildren<RoutesProps>) : ReactElement {
 }
 
 interface RouteProps {
-    route: string;
+    path: string;
 };
 
 export function Route(_: PropsWithChildren<RouteProps>): ReactElement {

@@ -9,7 +9,7 @@ export const defaultRoute: RouteContextData = { path: '*', data: {}, hash: '', q
 export const reducer = handleActions({
     NAVIGATE: (state: NavContext, action: Action<any>): NavContext => {
         let { history, location } = state;
-        console.log('history', history, 'location', location, 'action', action.payload)
+        
         if (location > 0) {
             history = history.slice(location)
         }
