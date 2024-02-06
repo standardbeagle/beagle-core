@@ -30,6 +30,7 @@
     "build": "tsc && vite build",
     "ts": "tsc",
     "test": "vitest",
+    "prepublish": "npm run build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "docs:dev": "vitepress dev docs",
