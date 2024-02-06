@@ -4,7 +4,8 @@ import { Routes, Route, Link } from "@standardbeagle/virtual-router";
 function App() {
   return (
     <>
-      <ul>
+      <h1>Pages</h1>
+      <ul className="tabs">
         <li>
           <Link to="/about">page 1</Link>
         </li>
@@ -12,15 +13,15 @@ function App() {
           <Link to="/users">page 2</Link>
         </li>
       </ul>
-      <h1>Pages</h1>
+      <h2>Current Page</h2>
       <Routes>
-        <Route route="/about">
-          <div className="card">Page 1</div>
+        <Route path="/about">
+          <div className="card"><h3>Page 1</h3></div>
         </Route>
-        <Route route="/users">
-          <div className="card">Page 2</div>
+        <Route path="/users">
+          <div className="card"><h3>Page 2</h3></div>
         </Route>
-        <Route route="/">
+        <Route path="/">
           <div className="card">Not Found</div>
         </Route>
       </Routes>
