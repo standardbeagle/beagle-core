@@ -74,7 +74,8 @@ export function Routes(props: PropsWithChildren<RoutesProps>) : ReactElement {
     const routeContext = useContext(RouteContext);
     const pathContext = useContext(PathContext);
     const result: RouteRenderData[] = [];
-    flattenActiveRoutes(result, children, routeContext.path, pathContext.path);
+
+    flattenActiveRoutes(result, children, routeContext.routePath, pathContext.path);
 
     return <>{ result.map(({children, match}, index) => {
         return (<RouteContext.Provider key={ index } value={{ ...match }}>{children}</RouteContext.Provider>);
@@ -90,7 +91,7 @@ export function Route(_: PropsWithChildren<RouteProps>): ReactElement {
 }
 
 interface RouteRenderData {
-    route?: string;
+    routePath: string;
     children: ReactNode;
     match: any;
 }
@@ -107,7 +108,8 @@ function flattenActiveRoutes(result: RouteRenderData[], children: ReactNode, bas
         const elementRoute = combineRoutes(base, element.props.path);
         const match = matchPath(elementRoute, path);
         if (match.isMatch) {
-            result.push({ 
+            result.push({
+                routePath: elementRoute,
                 children: element.props.children, 
                 match 
             });

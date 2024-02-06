@@ -4,7 +4,7 @@ export interface NavContext {
     location: number;
 }
 export interface PathData {
-    path: string;
+    routePath: string;
     data: any;
     hash: string;
     query: string;
@@ -20,5 +20,6 @@ export interface Action<T> {
 export interface PathMatch extends PathData {
     isMatch: boolean,
     remainder: string,
+    path: string,
 }
 

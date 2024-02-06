@@ -4,7 +4,7 @@ import { handleActions } from 'redux-actions';
 import { combinePaths } from './combinePaths.ts';
 
 export const defaultState: NavContext = { path: '/', history: [], location: 0 };
-export const defaultRoute: RouteContextData = { path: '*', data: {}, hash: '', query: '' };
+export const defaultRoute: RouteContextData = { routePath: '*', data: {}, hash: '', query: '' };
 
 export const reducer = handleActions({
     NAVIGATE: (state: NavContext, action: Action<any>): NavContext => {
@@ -15,7 +15,7 @@ export const reducer = handleActions({
         }
         return {
             path: combinePaths(state.path, action.payload),
-            history: [action.payload, ...history],
+            history: [state.path, ...history],
             location: 0,
         }
     },
