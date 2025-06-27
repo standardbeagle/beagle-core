@@ -4,7 +4,7 @@ var __publicField = (obj, key, value) => {
   __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
   return value;
 };
-import require$$0, { createContext, useMemo, useReducer, useContext, forwardRef } from "react";
+import require$$0, { createContext, useMemo, useReducer, useContext, useRef, useEffect, useCallback, forwardRef } from "react";
 var jsxRuntime = { exports: {} };
 var reactJsxRuntime_production_min = {};
 /**
@@ -1829,6 +1829,902 @@ class CommandQueueManager {
     return xpath ? allCommands.filter((cmd) => cmd.xpath === xpath) : allCommands;
   }
 }
+function useAsyncData(xpath, fetcher, config = {}) {
+  const dataState = useContext(DataContext);
+  const dispatch = useContext(DataDispatchContext);
+  if (!dataState || !dispatch) {
+    throw new Error("useAsyncData must be used within a DataProvider");
+  }
+  const {
+    enabled = true,
+    staleTime = 0,
+    cacheTime = 5 * 60 * 1e3,
+    // 5 minutes
+    refetchOnWindowFocus = false,
+    refetchOnReconnect = false,
+    retryCount = 3,
+    retryDelay = 1e3,
+    onSuccess,
+    onError
+  } = config;
+  const absoluteXPath = combineXPaths(dataState.xpath, xpath);
+  const asyncState = dataState.asyncStates[absoluteXPath];
+  const currentData = getDataAtXPath(dataState.data, absoluteXPath);
+  const commandQueueRef = useRef();
+  const retryCountRef = useRef(0);
+  const currentRequestIdRef = useRef();
+  if (!commandQueueRef.current) {
+    commandQueueRef.current = new CommandQueueManager(dispatch);
+  }
+  useEffect(() => {
+    if (commandQueueRef.current) {
+      commandQueueRef.current.updateQueue(dataState.commandQueue);
+    }
+  }, [dataState.commandQueue]);
+  const executeRequest = useCallback(async (requestId) => {
+    try {
+      dispatch(asyncStart(absoluteXPath, requestId, "fetch"));
+      const result = await fetcher();
+      dispatch(asyncSuccess(absoluteXPath, requestId, result));
+      retryCountRef.current = 0;
+      onSuccess == null ? void 0 : onSuccess(result);
+      return result;
+    } catch (error) {
+      const errorInstance = error instanceof Error ? error : new Error(String(error));
+      if (retryCountRef.current < retryCount) {
+        retryCountRef.current++;
+        const delay = retryDelay * Math.pow(2, retryCountRef.current - 1);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return executeRequest(requestId);
+      }
+      dispatch(asyncError(absoluteXPath, requestId, errorInstance, false));
+      onError == null ? void 0 : onError(errorInstance);
+      throw errorInstance;
+    }
+  }, [absoluteXPath, fetcher, dispatch, retryCount, retryDelay, onSuccess, onError]);
+  const refetch = useCallback(async () => {
+    const requestId = generateRequestId();
+    currentRequestIdRef.current = requestId;
+    if (commandQueueRef.current) {
+      const command = commandQueueRef.current.createCommand(
+        absoluteXPath,
+        "fetch",
+        executeRequest(requestId),
+        "normal"
+      );
+      commandQueueRef.current.enqueue(command);
+      return command.promise;
+    }
+    return executeRequest(requestId);
+  }, [absoluteXPath, executeRequest]);
+  const cancel = useCallback(() => {
+    if (currentRequestIdRef.current && commandQueueRef.current) {
+      commandQueueRef.current.cancel(currentRequestIdRef.current);
+    }
+  }, []);
+  const invalidate = useCallback(() => {
+    if (commandQueueRef.current) {
+      commandQueueRef.current.cancelByXPath(absoluteXPath);
+    }
+    if (asyncState) {
+      dispatch({
+        type: "ASYNC_CANCEL",
+        payload: {
+          xpath: absoluteXPath,
+          requestId: asyncState.requestId || generateRequestId()
+        }
+      });
+    }
+  }, [absoluteXPath, asyncState, dispatch]);
+  const isStale = useCallback(() => {
+    if (!(asyncState == null ? void 0 : asyncState.timestamp))
+      return true;
+    return Date.now() - asyncState.timestamp > staleTime;
+  }, [asyncState == null ? void 0 : asyncState.timestamp, staleTime]);
+  useEffect(() => {
+    if (enabled && (!asyncState || asyncState.status === "idle" || isStale())) {
+      refetch().catch(() => {
+      });
+    }
+  }, [enabled, absoluteXPath, asyncState == null ? void 0 : asyncState.status, refetch, isStale]);
+  useEffect(() => {
+    if (!refetchOnWindowFocus)
+      return;
+    const handleFocus = () => {
+      if (enabled && isStale()) {
+        refetch().catch(() => {
+        });
+      }
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [enabled, refetchOnWindowFocus, refetch, isStale]);
+  useEffect(() => {
+    if (!refetchOnReconnect)
+      return;
+    const handleOnline = () => {
+      if (enabled && isStale()) {
+        refetch().catch(() => {
+        });
+      }
+    };
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, [enabled, refetchOnReconnect, refetch, isStale]);
+  useEffect(() => {
+    return () => {
+      if (cacheTime === 0) {
+        invalidate();
+      }
+    };
+  }, [cacheTime, invalidate]);
+  const status = (asyncState == null ? void 0 : asyncState.status) || "idle";
+  return {
+    data: currentData,
+    isLoading: status === "loading",
+    isError: status === "error",
+    isSuccess: status === "success",
+    isIdle: status === "idle",
+    error: asyncState == null ? void 0 : asyncState.error,
+    refetch,
+    cancel,
+    invalidate
+  };
+}
+function useAsyncMutation(xpath, mutationFn, config = {}) {
+  const dataState = useContext(DataContext);
+  const dispatch = useContext(DataDispatchContext);
+  if (!dataState || !dispatch) {
+    throw new Error("useAsyncMutation must be used within a DataProvider");
+  }
+  const {
+    optimisticUpdate,
+    rollbackOnError = true,
+    invalidate = [],
+    retryCount = 0,
+    // Mutations typically don't retry by default
+    retryDelay = 1e3,
+    onSuccess,
+    onError,
+    onSettled
+  } = config;
+  const absoluteXPath = combineXPaths(dataState.xpath, xpath);
+  const asyncState = dataState.asyncStates[absoluteXPath];
+  const currentData = getDataAtXPath(dataState.data, absoluteXPath);
+  const commandQueueRef = useRef();
+  const retryCountRef = useRef(0);
+  const lastVariablesRef = useRef();
+  if (!commandQueueRef.current) {
+    commandQueueRef.current = new CommandQueueManager(dispatch);
+    commandQueueRef.current.updateQueue(dataState.commandQueue);
+  }
+  const executeMutation = useCallback(async (variables, requestId) => {
+    try {
+      let optimisticData;
+      if (optimisticUpdate && currentData !== void 0) {
+        optimisticData = optimisticUpdate(currentData, variables);
+      }
+      dispatch(asyncStart(
+        absoluteXPath,
+        requestId,
+        "mutate",
+        "high",
+        // Mutations get high priority
+        optimisticData
+      ));
+      const result = await mutationFn(variables);
+      dispatch(asyncSuccess(absoluteXPath, requestId, result));
+      if (invalidate.length > 0 && commandQueueRef.current) {
+        invalidate.forEach((path) => {
+          const invalidatePath = combineXPaths(dataState.xpath, path);
+          commandQueueRef.current.cancelByXPath(invalidatePath);
+          dispatch({
+            type: "ASYNC_CANCEL",
+            payload: {
+              xpath: invalidatePath,
+              requestId: generateRequestId()
+            }
+          });
+        });
+      }
+      retryCountRef.current = 0;
+      onSuccess == null ? void 0 : onSuccess(result, variables);
+      onSettled == null ? void 0 : onSettled(result, void 0, variables);
+      return result;
+    } catch (error) {
+      const errorInstance = error instanceof Error ? error : new Error(String(error));
+      if (retryCountRef.current < retryCount) {
+        retryCountRef.current++;
+        const delay = retryDelay * Math.pow(2, retryCountRef.current - 1);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return executeMutation(variables, requestId);
+      }
+      dispatch(asyncError(absoluteXPath, requestId, errorInstance, rollbackOnError));
+      onError == null ? void 0 : onError(errorInstance, variables);
+      onSettled == null ? void 0 : onSettled(void 0, errorInstance, variables);
+      throw errorInstance;
+    }
+  }, [
+    absoluteXPath,
+    mutationFn,
+    optimisticUpdate,
+    currentData,
+    dispatch,
+    invalidate,
+    dataState.xpath,
+    retryCount,
+    retryDelay,
+    rollbackOnError,
+    onSuccess,
+    onError,
+    onSettled
+  ]);
+  const mutateAsync = useCallback(async (variables) => {
+    const requestId = generateRequestId();
+    lastVariablesRef.current = variables;
+    if (commandQueueRef.current) {
+      const command = commandQueueRef.current.createCommand(
+        absoluteXPath,
+        "mutate",
+        executeMutation(variables, requestId),
+        "high"
+      );
+      commandQueueRef.current.enqueue(command);
+      return command.promise;
+    }
+    return executeMutation(variables, requestId);
+  }, [absoluteXPath, executeMutation]);
+  const mutate = useCallback((variables) => {
+    return mutateAsync(variables).catch((error) => {
+      console.error("Mutation failed:", error);
+      throw error;
+    });
+  }, [mutateAsync]);
+  const reset = useCallback(() => {
+    if ((asyncState == null ? void 0 : asyncState.requestId) && commandQueueRef.current) {
+      commandQueueRef.current.cancel(asyncState.requestId);
+    }
+    dispatch({
+      type: "ASYNC_CANCEL",
+      payload: {
+        xpath: absoluteXPath,
+        requestId: (asyncState == null ? void 0 : asyncState.requestId) || generateRequestId()
+      }
+    });
+    retryCountRef.current = 0;
+  }, [absoluteXPath, asyncState == null ? void 0 : asyncState.requestId, dispatch]);
+  const status = (asyncState == null ? void 0 : asyncState.status) || "idle";
+  return {
+    mutate,
+    mutateAsync,
+    reset,
+    isLoading: status === "loading",
+    isError: status === "error",
+    isSuccess: status === "success",
+    isIdle: status === "idle",
+    data: currentData,
+    error: asyncState == null ? void 0 : asyncState.error
+  };
+}
+function useAsyncState(xpath) {
+  const dataState = useContext(DataContext);
+  if (!dataState) {
+    throw new Error("useAsyncState must be used within a DataProvider");
+  }
+  const absoluteXPath = combineXPaths(dataState.xpath, xpath);
+  const asyncState = dataState.asyncStates[absoluteXPath];
+  const currentData = getDataAtXPath(dataState.data, absoluteXPath);
+  const isPending = dataState.pendingOperations.has((asyncState == null ? void 0 : asyncState.requestId) || "");
+  const asyncStateInfo = useMemo(() => {
+    if (!asyncState)
+      return void 0;
+    return {
+      ...asyncState,
+      xpath: absoluteXPath,
+      hasPendingOperation: isPending,
+      isStale: (staleTime = 0) => {
+        if (!asyncState.timestamp)
+          return true;
+        return Date.now() - asyncState.timestamp > staleTime;
+      }
+    };
+  }, [asyncState, absoluteXPath, isPending]);
+  const status = (asyncState == null ? void 0 : asyncState.status) || "idle";
+  return {
+    data: currentData,
+    asyncState: asyncStateInfo,
+    isLoading: status === "loading",
+    isError: status === "error",
+    isSuccess: status === "success",
+    isIdle: status === "idle",
+    error: asyncState == null ? void 0 : asyncState.error,
+    isPending,
+    lastUpdated: asyncState == null ? void 0 : asyncState.timestamp
+  };
+}
+function useAsyncStates(xpaths) {
+  const dataState = useContext(DataContext);
+  if (!dataState) {
+    throw new Error("useAsyncStates must be used within a DataProvider");
+  }
+  return useMemo(() => {
+    const results = {};
+    xpaths.forEach((xpath) => {
+      const absoluteXPath = combineXPaths(dataState.xpath, xpath);
+      const asyncState = dataState.asyncStates[absoluteXPath];
+      const currentData = getDataAtXPath(dataState.data, absoluteXPath);
+      const isPending = dataState.pendingOperations.has((asyncState == null ? void 0 : asyncState.requestId) || "");
+      const asyncStateInfo = asyncState ? {
+        ...asyncState,
+        xpath: absoluteXPath,
+        hasPendingOperation: isPending,
+        isStale: (staleTime = 0) => {
+          if (!asyncState.timestamp)
+            return true;
+          return Date.now() - asyncState.timestamp > staleTime;
+        }
+      } : void 0;
+      const status = (asyncState == null ? void 0 : asyncState.status) || "idle";
+      results[xpath] = {
+        data: currentData,
+        asyncState: asyncStateInfo,
+        isLoading: status === "loading",
+        isError: status === "error",
+        isSuccess: status === "success",
+        isIdle: status === "idle",
+        error: asyncState == null ? void 0 : asyncState.error,
+        isPending,
+        lastUpdated: asyncState == null ? void 0 : asyncState.timestamp
+      };
+    });
+    return results;
+  }, [dataState, xpaths]);
+}
+function useGlobalAsyncState() {
+  const dataState = useContext(DataContext);
+  if (!dataState) {
+    throw new Error("useGlobalAsyncState must be used within a DataProvider");
+  }
+  return useMemo(() => {
+    const allStates = Object.entries(dataState.asyncStates);
+    const pendingCount = dataState.pendingOperations.size;
+    const executingCount = dataState.commandQueue.executing.size;
+    const queuedCount = dataState.commandQueue.pending.length;
+    const summary = {
+      totalStates: allStates.length,
+      loadingStates: allStates.filter(([, state]) => state.status === "loading").length,
+      errorStates: allStates.filter(([, state]) => state.status === "error").length,
+      successStates: allStates.filter(([, state]) => state.status === "success").length,
+      idleStates: allStates.filter(([, state]) => state.status === "idle").length,
+      pendingOperations: pendingCount,
+      executingOperations: executingCount,
+      queuedOperations: queuedCount,
+      hasAnyLoading: allStates.some(([, state]) => state.status === "loading"),
+      hasAnyError: allStates.some(([, state]) => state.status === "error"),
+      optimisticUpdateCount: Object.keys(dataState.optimisticUpdates).length
+    };
+    const statesByStatus = {
+      loading: allStates.filter(([, state]) => state.status === "loading"),
+      error: allStates.filter(([, state]) => state.status === "error"),
+      success: allStates.filter(([, state]) => state.status === "success"),
+      idle: allStates.filter(([, state]) => state.status === "idle")
+    };
+    return {
+      summary,
+      statesByStatus,
+      asyncStates: dataState.asyncStates,
+      pendingOperations: dataState.pendingOperations,
+      commandQueue: dataState.commandQueue,
+      optimisticUpdates: dataState.optimisticUpdates
+    };
+  }, [dataState]);
+}
+function useAsyncBatch(operations, config = {}) {
+  const dataState = useContext(DataContext);
+  const dispatch = useContext(DataDispatchContext);
+  if (!dataState || !dispatch) {
+    throw new Error("useAsyncBatch must be used within a DataProvider");
+  }
+  const {
+    concurrency = 3,
+    failFast = false,
+    retryCount = 1,
+    retryDelay = 1e3,
+    onBatchComplete,
+    onBatchError
+  } = config;
+  const commandQueueRef = useRef();
+  const resultsRef = useRef([]);
+  const statusRef = useRef("idle");
+  const batchIdRef = useRef();
+  if (!commandQueueRef.current) {
+    commandQueueRef.current = new CommandQueueManager(dispatch, concurrency);
+    commandQueueRef.current.updateQueue(dataState.commandQueue);
+  }
+  const executeOperation = useCallback(async (operation, retryAttempt = 0) => {
+    var _a, _b;
+    const absoluteXPath = combineXPaths(dataState.xpath, operation.xpath);
+    const requestId = generateRequestId();
+    try {
+      dispatch(asyncStart(absoluteXPath, requestId, "fetch", operation.priority));
+      const result = await operation.fetcher();
+      dispatch(asyncSuccess(absoluteXPath, requestId, result));
+      (_a = operation.onSuccess) == null ? void 0 : _a.call(operation, result);
+      return {
+        xpath: operation.xpath,
+        status: "success",
+        data: result
+      };
+    } catch (error) {
+      const errorInstance = error instanceof Error ? error : new Error(String(error));
+      if (retryAttempt < retryCount) {
+        const delay = retryDelay * Math.pow(2, retryAttempt);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return executeOperation(operation, retryAttempt + 1);
+      }
+      dispatch(asyncError(absoluteXPath, requestId, errorInstance, false));
+      (_b = operation.onError) == null ? void 0 : _b.call(operation, errorInstance);
+      return {
+        xpath: operation.xpath,
+        status: "error",
+        error: errorInstance
+      };
+    }
+  }, [dataState.xpath, dispatch, retryCount, retryDelay]);
+  const execute = useCallback(async () => {
+    var _a;
+    if (statusRef.current === "loading") {
+      throw new Error("Batch operation is already in progress");
+    }
+    statusRef.current = "loading";
+    batchIdRef.current = generateRequestId();
+    resultsRef.current = operations.map((op) => ({
+      xpath: op.xpath,
+      status: "pending"
+    }));
+    try {
+      const promises = operations.map(async (operation, index) => {
+        try {
+          const result = await executeOperation(operation);
+          resultsRef.current[index] = result;
+          if (failFast && result.status === "error" && commandQueueRef.current) {
+            operations.slice(index + 1).forEach((op) => {
+              const absoluteXPath = combineXPaths(dataState.xpath, op.xpath);
+              commandQueueRef.current.cancelByXPath(absoluteXPath);
+            });
+            throw result.error;
+          }
+          return result;
+        } catch (error) {
+          const errorResult = {
+            xpath: operation.xpath,
+            status: "error",
+            error: error instanceof Error ? error : new Error(String(error))
+          };
+          resultsRef.current[index] = errorResult;
+          if (failFast) {
+            throw error;
+          }
+          return errorResult;
+        }
+      });
+      const results = await Promise.allSettled(promises);
+      const finalResults = results.map(
+        (result, index) => result.status === "fulfilled" ? result.value : {
+          xpath: operations[index].xpath,
+          status: "error",
+          error: result.reason instanceof Error ? result.reason : new Error(String(result.reason))
+        }
+      );
+      resultsRef.current = finalResults;
+      const hasErrors = finalResults.some((r) => r.status === "error");
+      statusRef.current = hasErrors ? "error" : "success";
+      if (hasErrors && onBatchError) {
+        const firstError = (_a = finalResults.find((r) => r.status === "error")) == null ? void 0 : _a.error;
+        onBatchError(firstError || new Error("Batch operation failed"), finalResults);
+      } else if (!hasErrors && onBatchComplete) {
+        onBatchComplete(finalResults);
+      }
+      return finalResults;
+    } catch (error) {
+      statusRef.current = "error";
+      const errorInstance = error instanceof Error ? error : new Error(String(error));
+      if (onBatchError) {
+        onBatchError(errorInstance, resultsRef.current);
+      }
+      throw errorInstance;
+    }
+  }, [operations, executeOperation, failFast, onBatchComplete, onBatchError, dataState.xpath]);
+  const cancel = useCallback(() => {
+    if (commandQueueRef.current && batchIdRef.current) {
+      operations.forEach((operation) => {
+        const absoluteXPath = combineXPaths(dataState.xpath, operation.xpath);
+        commandQueueRef.current.cancelByXPath(absoluteXPath);
+      });
+    }
+    statusRef.current = "idle";
+    resultsRef.current = [];
+  }, [operations, dataState.xpath]);
+  const progress = useMemo(() => {
+    const total = operations.length;
+    const completed = resultsRef.current.filter((r) => r.status === "success").length;
+    const failed = resultsRef.current.filter((r) => r.status === "error").length;
+    const pending = resultsRef.current.filter((r) => r.status === "pending").length;
+    return {
+      total,
+      completed,
+      failed,
+      pending,
+      percentage: total > 0 ? Math.round((completed + failed) / total * 100) : 0
+    };
+  }, [operations.length, resultsRef.current]);
+  return {
+    execute,
+    cancel,
+    isLoading: statusRef.current === "loading",
+    isError: statusRef.current === "error",
+    isSuccess: statusRef.current === "success",
+    isIdle: statusRef.current === "idle",
+    results: resultsRef.current,
+    progress
+  };
+}
+function useAsyncParallel(operations, config) {
+  return useAsyncBatch(
+    operations.map((op) => ({ ...op, priority: "normal" })),
+    { ...config, concurrency: operations.length }
+  );
+}
+function useAsyncSequential(operations, config) {
+  return useAsyncBatch(
+    operations.map((op) => ({ ...op, priority: "normal" })),
+    { ...config, concurrency: 1 }
+  );
+}
+function useOptimisticUpdates(xpath, config = {}) {
+  const dataState = useContext(DataContext);
+  const dispatch = useContext(DataDispatchContext);
+  if (!dataState || !dispatch) {
+    throw new Error("useOptimisticUpdates must be used within a DataProvider");
+  }
+  const {
+    onRollback,
+    onCommit
+  } = config;
+  const absoluteXPath = combineXPaths(dataState.xpath, xpath);
+  const apply = useCallback((newData) => {
+    const updateId = generateRequestId();
+    dispatch({
+      type: "ASYNC_START",
+      payload: {
+        xpath: absoluteXPath,
+        requestId: updateId,
+        operation: "mutate",
+        priority: "normal",
+        optimisticData: newData
+      }
+    });
+    return updateId;
+  }, [absoluteXPath, dispatch]);
+  const rollback = useCallback((updateId) => {
+    const optimisticId = `${updateId}_${absoluteXPath}`;
+    const optimisticUpdate = dataState.optimisticUpdates[optimisticId];
+    if (optimisticUpdate) {
+      dispatch({
+        type: "ASYNC_CANCEL",
+        payload: {
+          xpath: absoluteXPath,
+          requestId: updateId
+        }
+      });
+      onRollback == null ? void 0 : onRollback(optimisticUpdate.originalData);
+    }
+  }, [absoluteXPath, dataState.optimisticUpdates, dispatch, onRollback]);
+  const commit = useCallback((updateId) => {
+    const optimisticId = `${updateId}_${absoluteXPath}`;
+    const optimisticUpdate = dataState.optimisticUpdates[optimisticId];
+    if (optimisticUpdate) {
+      dispatch({
+        type: "ASYNC_SUCCESS",
+        payload: {
+          xpath: absoluteXPath,
+          requestId: updateId,
+          data: optimisticUpdate.optimisticData,
+          timestamp: Date.now()
+        }
+      });
+      onCommit == null ? void 0 : onCommit(optimisticUpdate.optimisticData);
+    }
+  }, [absoluteXPath, dataState.optimisticUpdates, dispatch, onCommit]);
+  const rollbackAll = useCallback(() => {
+    Object.entries(dataState.optimisticUpdates).forEach(([optimisticId, update]) => {
+      if (update.xpath === absoluteXPath) {
+        const updateId = optimisticId.split("_")[0];
+        rollback(updateId);
+      }
+    });
+  }, [dataState.optimisticUpdates, absoluteXPath, rollback]);
+  const getOriginalData = useCallback((updateId) => {
+    const optimisticId = `${updateId}_${absoluteXPath}`;
+    const optimisticUpdate = dataState.optimisticUpdates[optimisticId];
+    return optimisticUpdate ? getDataAtXPath(optimisticUpdate.originalData, absoluteXPath) : void 0;
+  }, [dataState.optimisticUpdates, absoluteXPath]);
+  const optimisticUpdateIds = Object.keys(dataState.optimisticUpdates).filter((id) => id.endsWith(`_${absoluteXPath}`)).map((id) => id.split("_")[0]);
+  return {
+    apply,
+    rollback,
+    commit,
+    rollbackAll,
+    getOriginalData,
+    hasOptimisticUpdates: optimisticUpdateIds.length > 0,
+    optimisticUpdateIds
+  };
+}
+function useOptimisticList(xpath, config = {}) {
+  const baseResult = useOptimisticUpdates(xpath, config);
+  const dataState = useContext(DataContext);
+  const absoluteXPath = combineXPaths(dataState.xpath, xpath);
+  const currentList = getDataAtXPath(dataState.data, absoluteXPath) || [];
+  const addItem = useCallback((item, position) => {
+    const newList = [...currentList];
+    if (position !== void 0 && position >= 0 && position <= newList.length) {
+      newList.splice(position, 0, item);
+    } else {
+      newList.push(item);
+    }
+    return baseResult.apply(newList);
+  }, [currentList, baseResult]);
+  const updateItem = useCallback((index, item) => {
+    if (index < 0 || index >= currentList.length) {
+      throw new Error(`Index ${index} is out of bounds for list of length ${currentList.length}`);
+    }
+    const newList = [...currentList];
+    newList[index] = item;
+    return baseResult.apply(newList);
+  }, [currentList, baseResult]);
+  const removeItem = useCallback((index) => {
+    if (index < 0 || index >= currentList.length) {
+      throw new Error(`Index ${index} is out of bounds for list of length ${currentList.length}`);
+    }
+    const newList = [...currentList];
+    newList.splice(index, 1);
+    return baseResult.apply(newList);
+  }, [currentList, baseResult]);
+  const moveItem = useCallback((fromIndex, toIndex) => {
+    if (fromIndex < 0 || fromIndex >= currentList.length || toIndex < 0 || toIndex >= currentList.length) {
+      throw new Error("Move indices are out of bounds");
+    }
+    const newList = [...currentList];
+    const [movedItem] = newList.splice(fromIndex, 1);
+    newList.splice(toIndex, 0, movedItem);
+    return baseResult.apply(newList);
+  }, [currentList, baseResult]);
+  return {
+    ...baseResult,
+    addItem,
+    updateItem,
+    removeItem,
+    moveItem
+  };
+}
+function useOptimisticObject(xpath, config = {}) {
+  const baseResult = useOptimisticUpdates(xpath, config);
+  const dataState = useContext(DataContext);
+  const absoluteXPath = combineXPaths(dataState.xpath, xpath);
+  const currentObject = getDataAtXPath(dataState.data, absoluteXPath) || {};
+  const updateProperty = useCallback((key, value) => {
+    const newObject = { ...currentObject, [key]: value };
+    return baseResult.apply(newObject);
+  }, [currentObject, baseResult]);
+  const updateProperties = useCallback((updates) => {
+    const newObject = { ...currentObject, ...updates };
+    return baseResult.apply(newObject);
+  }, [currentObject, baseResult]);
+  const removeProperty = useCallback((key) => {
+    const newObject = { ...currentObject };
+    delete newObject[key];
+    return baseResult.apply(newObject);
+  }, [currentObject, baseResult]);
+  const mergeObject = useCallback((updates) => {
+    const newObject = { ...currentObject };
+    Object.entries(updates).forEach(([key, value]) => {
+      if (typeof newObject[key] === "object" && typeof value === "object" && newObject[key] !== null && value !== null) {
+        newObject[key] = { ...newObject[key], ...value };
+      } else {
+        newObject[key] = value;
+      }
+    });
+    return baseResult.apply(newObject);
+  }, [currentObject, baseResult]);
+  return {
+    ...baseResult,
+    updateProperty,
+    updateProperties,
+    removeProperty,
+    mergeObject
+  };
+}
+function useInvalidation() {
+  const dataState = useContext(DataContext);
+  const dispatch = useContext(DataDispatchContext);
+  if (!dataState || !dispatch) {
+    throw new Error("useInvalidation must be used within a DataProvider");
+  }
+  const commandQueueManager = new CommandQueueManager(dispatch);
+  commandQueueManager.updateQueue(dataState.commandQueue);
+  const invalidate = useCallback((xpath, config = {}) => {
+    const {
+      includeChildren = false,
+      includeParents = false,
+      clearData = false
+    } = config;
+    const absoluteXPath = combineXPaths(dataState.xpath, xpath);
+    const pathsToInvalidate = /* @__PURE__ */ new Set([absoluteXPath]);
+    if (includeChildren) {
+      Object.keys(dataState.asyncStates).forEach((statePath) => {
+        if (statePath.startsWith(absoluteXPath + "/") || statePath.startsWith(absoluteXPath + "[")) {
+          pathsToInvalidate.add(statePath);
+        }
+      });
+    }
+    if (includeParents) {
+      const segments = parseXPath(absoluteXPath);
+      for (let i = segments.length - 1; i >= 0; i--) {
+        const parentSegments = segments.slice(0, i);
+        const parentPath = parentSegments.length === 0 ? "/" : "/" + parentSegments.map(
+          (seg) => seg.isArray && seg.index !== void 0 ? `${seg.property}[${seg.index}]` : seg.property
+        ).join("/");
+        if (dataState.asyncStates[parentPath]) {
+          pathsToInvalidate.add(parentPath);
+        }
+      }
+    }
+    pathsToInvalidate.forEach((path) => {
+      const asyncState = dataState.asyncStates[path];
+      commandQueueManager.cancelByXPath(path);
+      if (asyncState) {
+        dispatch({
+          type: "ASYNC_CANCEL",
+          payload: {
+            xpath: path,
+            requestId: asyncState.requestId || generateRequestId()
+          }
+        });
+      }
+      if (clearData) {
+        dispatch({
+          type: "DATA_OPERATION",
+          payload: {
+            xpath: path,
+            operation: "delete",
+            data: null
+          }
+        });
+      }
+    });
+  }, [dataState, dispatch, commandQueueManager]);
+  const invalidateMany = useCallback((xpaths, config = {}) => {
+    xpaths.forEach((xpath) => invalidate(xpath, config));
+  }, [invalidate]);
+  const invalidatePattern = useCallback((pattern, config = {}) => {
+    const regex = new RegExp(
+      pattern.replace(/\*/g, ".*").replace(/\[(\d+)\]/g, "\\[$1\\]").replace(/\[\*\]/g, "\\[\\d+\\]")
+    );
+    const matchingPaths = Object.keys(dataState.asyncStates).filter(
+      (path) => regex.test(path)
+    );
+    invalidateMany(matchingPaths, config);
+  }, [dataState.asyncStates, invalidateMany]);
+  const invalidateAll = useCallback(() => {
+    dataState.commandQueue.executing.forEach((command) => {
+      command.abortController.abort();
+    });
+    dataState.commandQueue.pending.forEach((command) => {
+      command.abortController.abort();
+    });
+    Object.keys(dataState.asyncStates).forEach((path) => {
+      const asyncState = dataState.asyncStates[path];
+      dispatch({
+        type: "ASYNC_CANCEL",
+        payload: {
+          xpath: path,
+          requestId: asyncState.requestId || generateRequestId()
+        }
+      });
+    });
+    dispatch({
+      type: "COMMAND_QUEUE_UPDATE",
+      payload: {
+        operation: "remove",
+        commandId: "all"
+      }
+    });
+  }, [dataState, dispatch]);
+  const revalidate = useCallback((xpath) => {
+    const absoluteXPath = combineXPaths(dataState.xpath, xpath);
+    const asyncState = dataState.asyncStates[absoluteXPath];
+    if (asyncState) {
+      dispatch({
+        type: "ASYNC_START",
+        payload: {
+          xpath: absoluteXPath,
+          requestId: generateRequestId(),
+          operation: "fetch",
+          priority: "normal"
+        }
+      });
+    }
+  }, [dataState, dispatch]);
+  const revalidateMany = useCallback((xpaths) => {
+    xpaths.forEach((xpath) => revalidate(xpath));
+  }, [revalidate]);
+  const getInvalidationCount = useCallback(() => {
+    return Object.keys(dataState.asyncStates).filter((path) => {
+      const state = dataState.asyncStates[path];
+      return state.status === "idle" || state.status === "error";
+    }).length;
+  }, [dataState.asyncStates]);
+  return {
+    invalidate,
+    invalidateMany,
+    invalidatePattern,
+    invalidateAll,
+    revalidate,
+    revalidateMany,
+    getInvalidationCount
+  };
+}
+function useAutoInvalidation(dependencies, config = {}) {
+  const { invalidateMany } = useInvalidation();
+  const { debounceMs = 100, onInvalidate, ...invalidationConfig } = config;
+  const debouncedInvalidate = useCallback(
+    /* @__PURE__ */ (() => {
+      let timeoutId;
+      return (paths) => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          invalidateMany(paths, invalidationConfig);
+          onInvalidate == null ? void 0 : onInvalidate(paths);
+        }, debounceMs);
+      };
+    })(),
+    [invalidateMany, invalidationConfig, debounceMs, onInvalidate]
+  );
+  return {
+    trigger: () => debouncedInvalidate(dependencies),
+    invalidateDependencies: () => invalidateMany(dependencies, invalidationConfig)
+  };
+}
+function useQueryInvalidation() {
+  const dataState = useContext(DataContext);
+  const { invalidatePattern, invalidateMany } = useInvalidation();
+  const invalidateQueries = useCallback((queryKey) => {
+    if (Array.isArray(queryKey)) {
+      invalidateMany(queryKey);
+    } else {
+      invalidatePattern(queryKey);
+    }
+  }, [invalidatePattern, invalidateMany]);
+  const invalidateQueriesMatching = useCallback((predicate) => {
+    const matchingPaths = Object.keys(dataState.asyncStates).filter(predicate);
+    invalidateMany(matchingPaths);
+  }, [dataState.asyncStates, invalidateMany]);
+  const getQueries = useCallback((queryKey) => {
+    if (!queryKey) {
+      return Object.keys(dataState.asyncStates);
+    }
+    if (Array.isArray(queryKey)) {
+      return queryKey.filter((path) => dataState.asyncStates[path]);
+    }
+    const regex = new RegExp(queryKey.replace(/\*/g, ".*"));
+    return Object.keys(dataState.asyncStates).filter((path) => regex.test(path));
+  }, [dataState.asyncStates]);
+  return {
+    invalidateQueries,
+    invalidateQueriesMatching,
+    getQueries
+  };
+}
 function Form({
   xpath = "",
   operation = "merge",
@@ -1937,12 +2833,26 @@ export {
   asyncSuccess,
   commandQueueUpdate,
   generateRequestId,
+  useAsyncBatch,
+  useAsyncData,
+  useAsyncMutation,
+  useAsyncParallel,
+  useAsyncSequential,
+  useAsyncState,
+  useAsyncStates,
+  useAutoInvalidation,
   useData,
   useDataAtXPath,
   useDataManipulation,
+  useGlobalAsyncState,
   useHistory,
+  useInvalidation,
   useNavigate,
   useNavigation,
+  useOptimisticList,
+  useOptimisticObject,
+  useOptimisticUpdates,
+  useQueryInvalidation,
   useTargetData,
   useXPath
 };
