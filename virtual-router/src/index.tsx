@@ -1,8 +1,8 @@
 import React from 'react';
-import type { PropsWithChildren } from 'react';
+import type { ComponentProps } from 'react';
 import { useContext, forwardRef, Children, isValidElement } from 'react';
 import type { ReactElement, ReactNode } from 'react';
-import type { NavContext } from './types.ts';
+import type { NavContext, RouteParams, SearchParams, NavigationObject } from './types.ts';
 import { combineRoutes } from './state/combineRoutes.ts';
 import { matchPath } from './state/matchPath.ts';
 import { PathContext, PathDispatchContext, RouteContext } from './provider.tsx';
@@ -12,81 +12,139 @@ export { PathProvider } from './provider.tsx';
 
 export function usePath(): string {
     const pathState = useContext(PathContext) as NavContext;
-    return pathState.path;
+    // Extract just the path portion, without query parameters or hash
+    const fullPath = pathState.path;
+    const queryIndex = fullPath.indexOf('?');
+    const hashIndex = fullPath.indexOf('#');
+    
+    let endIndex = fullPath.length;
+    if (queryIndex !== -1) endIndex = Math.min(endIndex, queryIndex);
+    if (hashIndex !== -1) endIndex = Math.min(endIndex, hashIndex);
+    
+    return fullPath.substring(0, endIndex);
 }
 
-export function useHistory(): string[] {
-    const pathState = useContext(PathContext) as NavContext;
+export function useHistory(): readonly string[] {
+    const pathState = useContext(PathContext);
+    if (!pathState) {
+        throw new Error('useHistory must be used within a PathProvider');
+    }
     return pathState.history;
 }
 
 export function useNavigate(): (url: string) => void {
-    const dispatch = useContext(PathDispatchContext) as (x: any) => void;
+    const dispatch = useContext(PathDispatchContext);
+    if (!dispatch) {
+        throw new Error('useNavigate must be used within a PathProvider');
+    }
     return (path: string) => dispatch(navigate(path));
 }
 
-export function useNavigation(): any {
-    const dispatch = useContext(PathDispatchContext) as (x: any) => void;
-    const pathState = useContext(PathContext) as NavContext;
+export function useNavigation(): NavigationObject {
+    const dispatch = useContext(PathDispatchContext);
+    const pathState = useContext(PathContext);
+    
+    if (!dispatch || !pathState) {
+        throw new Error('useNavigation must be used within a PathProvider');
+    }
+    
     return {
         navigate: (path: string) => dispatch(navigate(path)),
         back: (count: number = 1) => dispatch(back(count)),
         forward: (count: number = 1) => dispatch(forward(count)),
-        hasBack: pathState.location < pathState.history.length - 1,
-        ...pathState
+        hasBack: pathState.location < pathState.history.length,
+        hasForward: pathState.location > 0,
+        path: pathState.path,
+        history: pathState.history,
+        location: pathState.location,
     };
 }
 
-export function useParams(): any {
-    return useContext(RouteContext).data;
+export function useParams(): RouteParams {
+    const routeContext = useContext(RouteContext);
+    if (!routeContext) {
+        throw new Error('useParams must be used within a PathProvider');
+    }
+    return routeContext.data;
 }
 
-export function useSearchParams(): any {
-    var { query, hash } = useContext(RouteContext);
+export function useSearchParams(): SearchParams {
+    const routeContext = useContext(RouteContext);
+    if (!routeContext) {
+        throw new Error('useSearchParams must be used within a PathProvider');
+    }
+    const { query, hash } = routeContext;
     return { search: new URLSearchParams(query), hash, query };
 }
 
-export function useRouteError(): any {
-    return {};
+// Export error handling from ErrorContext
+export { useRouteError, useRouteErrors, ErrorProvider } from './ErrorContext';
+export { RouterErrorBoundary } from './ErrorBoundary';
+
+// Export form handling components
+export { Form, SubmitButton, FormLink, useFormData, useFormSubmission } from './FormHandler';
+
+interface LinkProps extends Omit<ComponentProps<'a'>, 'href' | 'onClick'> {
+    to: string;
+    children: ReactNode;
 }
 
-export const Link = forwardRef((props: any, ref: any) => {
-    const { to, children, ...rest } = props as { to: string, children: ReactElement[] };
+export const Link = forwardRef<HTMLAnchorElement, LinkProps>(({ to, children, ...rest }, ref) => {
     const navigate = useNavigate();
 
     const handleClick = (event: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => {
-        if (!event.defaultPrevented) event.preventDefault();
-        navigate(to);
-    }
+        if (!event.defaultPrevented) {
+            event.preventDefault();
+            navigate(to);
+        }
+    };
 
-    return <a {...rest}
-        href={to}
-        ref={ref as any}
-        onClick={handleClick} >
-        {children}
-    </a>;
+    return (
+        <a 
+            {...rest}
+            href={to}
+            ref={ref}
+            onClick={handleClick}
+        >
+            {children}
+        </a>
+    );
 });
 
-interface RoutesProps {};
+Link.displayName = 'Link';
 
-export function Routes(props: PropsWithChildren<RoutesProps>) : ReactElement {
-    const { children } = props;
+interface RoutesProps {
+    children?: ReactNode;
+}
+
+export function Routes({ children }: RoutesProps): ReactElement {
     const routeContext = useContext(RouteContext);
     const pathContext = useContext(PathContext);
+    
+    if (!routeContext || !pathContext) {
+        throw new Error('Routes must be used within a PathProvider');
+    }
+    
     const result: RouteRenderData[] = [];
-
     flattenActiveRoutes(result, children, routeContext.routePath, pathContext.path);
 
-    return <>{ result.map(({children, match}, index) => {
-        return (<RouteContext.Provider key={ index } value={{ ...match }}>{children}</RouteContext.Provider>);
-    })}</>
+    return (
+        <>
+            {result.map(({ children, match }, index) => (
+                <RouteContext.Provider key={index} value={{ ...match }}>
+                    {children}
+                </RouteContext.Provider>
+            ))}
+        </>
+    );
 }
 
 interface RouteProps {
     path: string;
-};
+    children?: ReactNode;
+}
 
-export function Route(_: PropsWithChildren<RouteProps>): ReactElement {
+export function Route(_: RouteProps): ReactElement {
     return <></>;
 }
 

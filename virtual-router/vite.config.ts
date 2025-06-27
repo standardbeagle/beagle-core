@@ -23,10 +23,28 @@ export default defineConfig({
         },
       },
     },
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true,
+      },
+    },
   },
   test: {
     globals: true,
     environment: 'jsdom',
     setupFiles: "./setup-tests.ts",
+    coverage: {
+      reporter: ['text', 'json', 'html'],
+      exclude: [
+        'node_modules/',
+        'setup-tests.ts',
+        '**/*.d.ts',
+        '**/*.config.*',
+        '**/mockData/**',
+        'dist/**',
+      ],
+    },
   },
 })
