@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest';
 import { reducer, defaultState, defaultRoute } from './reducer';
-import { navigate, back, forward } from './actions';
+import { navigate, back, forward, sync } from './actions';
 
 test('defaultState should have correct initial values', () => {
   expect(defaultState).toEqual({
@@ -256,6 +256,30 @@ test('Edge case: navigate with only slash', () => {
     history: ['/users/profile'],
     location: 0,
   });
+});
+
+test('SYNC action should update path without modifying history', () => {
+  const state = {
+    path: '/current',
+    history: ['/previous', '/older'],
+    location: 0,
+  };
+  const action = sync('/external/path');
+  const newState = reducer(state, action);
+
+  expect(newState).toEqual({
+    path: '/external/path',
+    history: ['/previous', '/older'],
+    location: 0,
+  });
+});
+
+test('SYNC action should return same state for same path', () => {
+  const state = { path: '/current', history: ['/prev'], location: 0 };
+  const action = sync('/current');
+  const newState = reducer(state, action);
+
+  expect(newState).toBe(state);
 });
 
 test('Unknown action should return current state', () => {

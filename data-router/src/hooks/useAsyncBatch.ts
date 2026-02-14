@@ -1,4 +1,4 @@
-import { useContext, useRef, useCallback, useMemo } from 'react';
+import { useContext, useRef, useCallback, useMemo, useEffect } from 'react';
 import { DataContext, DataDispatchContext } from '../provider';
 import { asyncStart, asyncSuccess, asyncError, generateRequestId } from '../state/actions';
 import { combineXPaths } from '../state/xpath-utils';
@@ -75,6 +75,11 @@ export function useAsyncBatch(
         commandQueueRef.current = new CommandQueueManager(dispatch, concurrency);
         commandQueueRef.current.updateQueue(dataState.commandQueue);
     }
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => { commandQueueRef.current?.destroy(); };
+    }, []);
 
     const executeOperation = useCallback(async (
         operation: BatchOperation,

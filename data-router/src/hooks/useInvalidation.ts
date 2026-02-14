@@ -1,4 +1,4 @@
-import { useContext, useCallback } from 'react';
+import { useContext, useCallback, useRef, useEffect } from 'react';
 import { DataContext, DataDispatchContext } from '../provider';
 import { generateRequestId } from '../state/actions';
 import { combineXPaths, parseXPath } from '../state/xpath-utils';
@@ -29,8 +29,18 @@ export function useInvalidation(): InvalidationResult {
         throw new Error('useInvalidation must be used within a DataProvider');
     }
 
-    const commandQueueManager = new CommandQueueManager(dispatch);
-    commandQueueManager.updateQueue(dataState.commandQueue);
+    const commandQueueRef = useRef<CommandQueueManager>();
+    if (!commandQueueRef.current) {
+        commandQueueRef.current = new CommandQueueManager(dispatch);
+    }
+
+    useEffect(() => {
+        commandQueueRef.current?.updateQueue(dataState.commandQueue);
+    }, [dataState.commandQueue]);
+
+    useEffect(() => {
+        return () => { commandQueueRef.current?.destroy(); };
+    }, []);
 
     const invalidate = useCallback((xpath: string, config: InvalidationConfig = {}) => {
         const {
@@ -76,7 +86,7 @@ export function useInvalidation(): InvalidationResult {
             const asyncState = dataState.asyncStates[path];
             
             // Cancel any pending operations for this path
-            commandQueueManager.cancelByXPath(path);
+            commandQueueRef.current?.cancelByXPath(path);
             
             // Clear async state
             if (asyncState) {
@@ -101,7 +111,7 @@ export function useInvalidation(): InvalidationResult {
                 });
             }
         });
-    }, [dataState, dispatch, commandQueueManager]);
+    }, [dataState, dispatch]);
 
     const invalidateMany = useCallback((xpaths: string[], config: InvalidationConfig = {}) => {
         xpaths.forEach(xpath => invalidate(xpath, config));

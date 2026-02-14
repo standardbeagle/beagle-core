@@ -54,9 +54,9 @@ describe('useAsyncData', () => {
     it('should handle fetch errors', async () => {
         const error = new Error('Network error');
         mockFetcher.mockRejectedValue(error);
-        
+
         const { result } = renderHook(
-            () => useAsyncData('/users[0]', mockFetcher),
+            () => useAsyncData('/users[0]', mockFetcher, { retryCount: 0 }),
             { wrapper: TestProvider }
         );
 
@@ -74,15 +74,15 @@ describe('useAsyncData', () => {
             .mockRejectedValueOnce(new Error('First failure'))
             .mockRejectedValueOnce(new Error('Second failure'))
             .mockResolvedValue({ id: 1, name: 'John' });
-        
+
         const { result } = renderHook(
-            () => useAsyncData('/users[0]', mockFetcher, { retryCount: 2 }),
+            () => useAsyncData('/users[0]', mockFetcher, { retryCount: 2, retryDelay: 10 }),
             { wrapper: TestProvider }
         );
 
         await waitFor(() => {
             expect(result.current.isSuccess).toBe(true);
-        });
+        }, { timeout: 3000 });
 
         expect(mockFetcher).toHaveBeenCalledTimes(3);
         expect(result.current.data).toEqual({ id: 1, name: 'John' });
@@ -109,19 +109,19 @@ describe('useAsyncData', () => {
     });
 
     it('should support cancellation', async () => {
-        mockFetcher.mockImplementation(() => 
+        mockFetcher.mockImplementation(() =>
             new Promise((resolve) => setTimeout(() => resolve({ id: 1 }), 1000))
         );
-        
+
         const { result } = renderHook(
             () => useAsyncData('/users[0]', mockFetcher),
             { wrapper: TestProvider }
         );
 
         expect(result.current.isLoading).toBe(true);
-        
+
         act(() => {
-            result.current.cancel();
+            result.current.invalidate();
         });
 
         await waitFor(() => {

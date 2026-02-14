@@ -9,6 +9,7 @@ import { PathContext, PathDispatchContext, RouteContext } from './provider.tsx';
 import { navigate, back, forward } from './state/actions.ts';
 
 export { PathProvider } from './provider.tsx';
+export type { ConnectorProps } from './connectors/types';
 
 export function usePath(): string {
     const pathState = useContext(PathContext) as NavContext;

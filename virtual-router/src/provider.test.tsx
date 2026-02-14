@@ -1,8 +1,9 @@
 import { test, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import { useContext } from 'react';
 import { PathProvider, PathContext, PathDispatchContext, RouteContext } from './provider';
 import { defaultState, defaultRoute } from './state/reducer';
+import { navigate } from './state/actions';
 
 // Test component to access context values
 function TestComponent() {
@@ -211,4 +212,106 @@ test('PathProvider should pass through any children type', () => {
 
   // If we got here without errors, the test passes
   expect(true).toBe(true);
+});
+
+// Controlled mode tests
+test('Controlled mode: externalPath changes update internal path', () => {
+  const { rerender } = render(
+    <PathProvider path="/" basePath="/widgets" externalPath="/widgets/dashboard">
+      <TestComponent />
+    </PathProvider>
+  );
+
+  expect(screen.getByTestId('path').textContent).toBe('/dashboard');
+
+  rerender(
+    <PathProvider path="/" basePath="/widgets" externalPath="/widgets/settings">
+      <TestComponent />
+    </PathProvider>
+  );
+
+  expect(screen.getByTestId('path').textContent).toBe('/settings');
+});
+
+test('Controlled mode: onChange fires on internal navigation', () => {
+  const onChange = vi.fn();
+  let capturedDispatch: any = null;
+
+  function CaptureAndDisplay() {
+    const pathState = useContext(PathContext);
+    const dispatch = useContext(PathDispatchContext);
+    capturedDispatch = dispatch;
+    return <div data-testid="ctrl-path">{pathState.path}</div>;
+  }
+
+  render(
+    <PathProvider path="/" basePath="/widgets" externalPath="/widgets/" onChange={onChange}>
+      <CaptureAndDisplay />
+    </PathProvider>
+  );
+
+  expect(screen.getByTestId('ctrl-path').textContent).toBe('/');
+
+  act(() => {
+    capturedDispatch(navigate('/about'));
+  });
+
+  expect(screen.getByTestId('ctrl-path').textContent).toBe('/about');
+  expect(onChange).toHaveBeenCalledWith('/widgets/about');
+});
+
+test('Controlled mode: basePath stripping works correctly', () => {
+  render(
+    <PathProvider path="/" basePath="/app/widgets" externalPath="/app/widgets/list">
+      <TestComponent />
+    </PathProvider>
+  );
+
+  expect(screen.getByTestId('path').textContent).toBe('/list');
+});
+
+test('Controlled mode: no infinite sync loops', () => {
+  const onChange = vi.fn();
+
+  const { rerender } = render(
+    <PathProvider path="/" basePath="/widgets" externalPath="/widgets/a" onChange={onChange}>
+      <TestComponent />
+    </PathProvider>
+  );
+
+  // externalPath change should NOT fire onChange (it's an external sync)
+  onChange.mockClear();
+  rerender(
+    <PathProvider path="/" basePath="/widgets" externalPath="/widgets/b" onChange={onChange}>
+      <TestComponent />
+    </PathProvider>
+  );
+
+  expect(screen.getByTestId('path').textContent).toBe('/b');
+  expect(onChange).not.toHaveBeenCalled();
+});
+
+test('Without externalPath/onChange, PathProvider works as before', () => {
+  let capturedDispatch: any = null;
+
+  function CaptureAndDisplay() {
+    const pathState = useContext(PathContext);
+    const dispatch = useContext(PathDispatchContext);
+    capturedDispatch = dispatch;
+    return <div data-testid="legacy-path">{pathState.path}</div>;
+  }
+
+  render(
+    <PathProvider path="/start">
+      <CaptureAndDisplay />
+    </PathProvider>
+  );
+
+  expect(screen.getByTestId('legacy-path').textContent).toBe('/start');
+
+  act(() => {
+    capturedDispatch(navigate('/next'));
+  });
+
+  expect(screen.getByTestId('legacy-path').textContent).toBe('/next');
 });

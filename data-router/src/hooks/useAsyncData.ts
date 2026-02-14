@@ -65,6 +65,11 @@ export function useAsyncData<T = any>(
         commandQueueRef.current = new CommandQueueManager(dispatch);
     }
 
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => { commandQueueRef.current?.destroy(); };
+    }, []);
+
     // Update command queue with current state
     useEffect(() => {
         if (commandQueueRef.current) {
@@ -154,12 +159,12 @@ export function useAsyncData<T = any>(
 
     // Auto-fetch on mount and when enabled/xpath changes
     useEffect(() => {
-        if (enabled && (!asyncState || asyncState.status === 'idle' || isStale())) {
+        if (enabled && (!asyncState || asyncState.status === 'idle')) {
             refetch().catch(() => {
                 // Error handling is done in executeRequest
             });
         }
-    }, [enabled, absoluteXPath, asyncState?.status, refetch, isStale]);
+    }, [enabled, absoluteXPath]);
 
     // Handle window focus refetch
     useEffect(() => {

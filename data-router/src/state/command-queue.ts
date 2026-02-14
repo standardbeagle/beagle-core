@@ -7,12 +7,25 @@ export class CommandQueueManager {
         executing: new Map(),
         maxConcurrent: 3
     };
-    
+
     private dispatch: (action: any) => void;
-    
+    private destroyed = false;
+
     constructor(dispatch: (action: any) => void, maxConcurrent: number = 3) {
         this.dispatch = dispatch;
         this.queue = { ...this.queue, maxConcurrent };
+    }
+
+    destroy(): void {
+        this.destroyed = true;
+        this.queue.executing.forEach((command) => {
+            command.abortController.abort();
+        });
+        this.queue = {
+            pending: [],
+            executing: new Map(),
+            maxConcurrent: this.queue.maxConcurrent
+        };
     }
     
     createCommand(
@@ -47,11 +60,16 @@ export class CommandQueueManager {
     }
     
     enqueue(command: AsyncCommand): void {
+        if (this.destroyed) return;
+        this.queue = {
+            ...this.queue,
+            pending: [...this.queue.pending, command]
+        };
         this.dispatch({
             type: 'COMMAND_QUEUE_UPDATE',
             payload: { operation: 'add', command }
         });
-        
+
         this.processQueue();
     }
     
@@ -83,6 +101,7 @@ export class CommandQueueManager {
     }
     
     private processQueue(): void {
+        if (this.destroyed) return;
         while (this.queue.executing.size < this.queue.maxConcurrent && this.queue.pending.length > 0) {
             const sortedPending = [...this.queue.pending].sort((a, b) => {
                 const priorityOrder = { high: 3, normal: 2, low: 1 };
@@ -99,46 +118,38 @@ export class CommandQueueManager {
     }
     
     private executeCommand(command: AsyncCommand): void {
+        if (this.destroyed) return;
+        const newExecuting = new Map(this.queue.executing);
+        newExecuting.set(command.id, command);
+        this.queue = {
+            ...this.queue,
+            pending: this.queue.pending.filter(c => c.id !== command.id),
+            executing: newExecuting
+        };
         this.dispatch({
             type: 'COMMAND_QUEUE_UPDATE',
             payload: { operation: 'execute', command }
         });
-        
-        command.promise
-            .then(result => {
-                this.dispatch({
-                    type: 'ASYNC_SUCCESS',
-                    payload: {
-                        xpath: command.xpath,
-                        requestId: command.id,
-                        data: result,
-                        timestamp: Date.now()
-                    }
-                });
-            })
-            .catch(error => {
-                if (error.name !== 'AbortError') {
-                    this.dispatch({
-                        type: 'ASYNC_ERROR',
-                        payload: {
-                            xpath: command.xpath,
-                            requestId: command.id,
-                            error,
-                            shouldRollback: true
-                        }
-                    });
-                }
-            });
+
+        command.promise.catch(() => {
+            // Errors are handled by the caller's promise chain (executeRequest).
+            // This catch prevents unhandled rejection warnings.
+        });
     }
     
     private removeFromExecuting(commandId: string): void {
+        const updatedExecuting = new Map(this.queue.executing);
+        updatedExecuting.delete(commandId);
+        this.queue = {
+            ...this.queue,
+            executing: updatedExecuting
+        };
         this.dispatch({
             type: 'COMMAND_QUEUE_UPDATE',
             payload: { operation: 'remove', commandId }
         });
-        
-        // Use setTimeout to avoid infinite recursion
-        setTimeout(() => this.processQueue(), 0);
+
+        queueMicrotask(() => this.processQueue());
     }
     
     updateQueue(newQueue: CommandQueue): void {

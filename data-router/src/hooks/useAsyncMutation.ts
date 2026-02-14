@@ -1,4 +1,4 @@
-import { useContext, useRef, useCallback } from 'react';
+import { useContext, useRef, useCallback, useEffect } from 'react';
 import { DataContext, DataDispatchContext } from '../provider';
 import { asyncStart, asyncSuccess, asyncError, generateRequestId } from '../state/actions';
 import { combineXPaths, getDataAtXPath } from '../state/xpath-utils';
@@ -63,6 +63,11 @@ export function useAsyncMutation<TData = any, TVariables = any>(
         commandQueueRef.current = new CommandQueueManager(dispatch);
         commandQueueRef.current.updateQueue(dataState.commandQueue);
     }
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => { commandQueueRef.current?.destroy(); };
+    }, []);
 
     const executeMutation = useCallback(async (
         variables: TVariables, 

@@ -21,6 +21,6 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/connectors/react-router.tsx", "src/connectors/nextjs.tsx", "src/connectors/tanstack.tsx"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

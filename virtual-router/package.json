@@ -6,18 +6,24 @@
   "files": [
     "/dist"
   ],
-  "main": "dist/index.umd.cjs",
+  "main": "dist/index.es.js",
   "module": "dist/index.es.js",
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.es.js"
-      },
-      "require": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.umd.cjs"
-      }
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.es.js"
+    },
+    "./connectors/react-router": {
+      "types": "./dist/connectors/react-router.d.ts",
+      "default": "./dist/connectors/react-router.es.js"
+    },
+    "./connectors/nextjs": {
+      "types": "./dist/connectors/nextjs.d.ts",
+      "default": "./dist/connectors/nextjs.es.js"
+    },
+    "./connectors/tanstack": {
+      "types": "./dist/connectors/tanstack.d.ts",
+      "default": "./dist/connectors/tanstack.es.js"
     }
   },
   "repository": {
@@ -67,6 +73,14 @@
   },
   "peerDependencies": {
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "react-router-dom": ">=6",
+    "next": ">=13",
+    "@tanstack/react-router": ">=1"
+  },
+  "peerDependenciesMeta": {
+    "react-router-dom": { "optional": true },
+    "next": { "optional": true },
+    "@tanstack/react-router": { "optional": true }
   }
 }

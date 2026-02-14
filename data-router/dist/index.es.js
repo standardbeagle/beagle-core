@@ -1706,8 +1706,20 @@ class CommandQueueManager {
       maxConcurrent: 3
     });
     __publicField(this, "dispatch");
+    __publicField(this, "destroyed", false);
     this.dispatch = dispatch;
     this.queue = { ...this.queue, maxConcurrent };
+  }
+  destroy() {
+    this.destroyed = true;
+    this.queue.executing.forEach((command) => {
+      command.abortController.abort();
+    });
+    this.queue = {
+      pending: [],
+      executing: /* @__PURE__ */ new Map(),
+      maxConcurrent: this.queue.maxConcurrent
+    };
   }
   createCommand(xpath, operation, promise, priority = "normal") {
     const abortController = new AbortController();
@@ -1733,6 +1745,12 @@ class CommandQueueManager {
     };
   }
   enqueue(command) {
+    if (this.destroyed)
+      return;
+    this.queue = {
+      ...this.queue,
+      pending: [...this.queue.pending, command]
+    };
     this.dispatch({
       type: "COMMAND_QUEUE_UPDATE",
       payload: { operation: "add", command }
@@ -1763,6 +1781,8 @@ class CommandQueueManager {
     };
   }
   processQueue() {
+    if (this.destroyed)
+      return;
     while (this.queue.executing.size < this.queue.maxConcurrent && this.queue.pending.length > 0) {
       const sortedPending = [...this.queue.pending].sort((a, b2) => {
         const priorityOrder = { high: 3, normal: 2, low: 1 };
@@ -1777,40 +1797,34 @@ class CommandQueueManager {
     }
   }
   executeCommand(command) {
+    if (this.destroyed)
+      return;
+    const newExecuting = new Map(this.queue.executing);
+    newExecuting.set(command.id, command);
+    this.queue = {
+      ...this.queue,
+      pending: this.queue.pending.filter((c) => c.id !== command.id),
+      executing: newExecuting
+    };
     this.dispatch({
       type: "COMMAND_QUEUE_UPDATE",
       payload: { operation: "execute", command }
     });
-    command.promise.then((result) => {
-      this.dispatch({
-        type: "ASYNC_SUCCESS",
-        payload: {
-          xpath: command.xpath,
-          requestId: command.id,
-          data: result,
-          timestamp: Date.now()
-        }
-      });
-    }).catch((error) => {
-      if (error.name !== "AbortError") {
-        this.dispatch({
-          type: "ASYNC_ERROR",
-          payload: {
-            xpath: command.xpath,
-            requestId: command.id,
-            error,
-            shouldRollback: true
-          }
-        });
-      }
+    command.promise.catch(() => {
     });
   }
   removeFromExecuting(commandId) {
+    const updatedExecuting = new Map(this.queue.executing);
+    updatedExecuting.delete(commandId);
+    this.queue = {
+      ...this.queue,
+      executing: updatedExecuting
+    };
     this.dispatch({
       type: "COMMAND_QUEUE_UPDATE",
       payload: { operation: "remove", commandId }
     });
-    setTimeout(() => this.processQueue(), 0);
+    queueMicrotask(() => this.processQueue());
   }
   updateQueue(newQueue) {
     this.queue = newQueue;
@@ -1856,6 +1870,12 @@ function useAsyncData(xpath, fetcher, config = {}) {
   if (!commandQueueRef.current) {
     commandQueueRef.current = new CommandQueueManager(dispatch);
   }
+  useEffect(() => {
+    return () => {
+      var _a;
+      (_a = commandQueueRef.current) == null ? void 0 : _a.destroy();
+    };
+  }, []);
   useEffect(() => {
     if (commandQueueRef.current) {
       commandQueueRef.current.updateQueue(dataState.commandQueue);
@@ -1922,11 +1942,11 @@ function useAsyncData(xpath, fetcher, config = {}) {
     return Date.now() - asyncState.timestamp > staleTime;
   }, [asyncState == null ? void 0 : asyncState.timestamp, staleTime]);
   useEffect(() => {
-    if (enabled && (!asyncState || asyncState.status === "idle" || isStale())) {
+    if (enabled && (!asyncState || asyncState.status === "idle")) {
       refetch().catch(() => {
       });
     }
-  }, [enabled, absoluteXPath, asyncState == null ? void 0 : asyncState.status, refetch, isStale]);
+  }, [enabled, absoluteXPath]);
   useEffect(() => {
     if (!refetchOnWindowFocus)
       return;
@@ -1998,6 +2018,12 @@ function useAsyncMutation(xpath, mutationFn, config = {}) {
     commandQueueRef.current = new CommandQueueManager(dispatch);
     commandQueueRef.current.updateQueue(dataState.commandQueue);
   }
+  useEffect(() => {
+    return () => {
+      var _a;
+      (_a = commandQueueRef.current) == null ? void 0 : _a.destroy();
+    };
+  }, []);
   const executeMutation = useCallback(async (variables, requestId) => {
     try {
       let optimisticData;
@@ -2241,6 +2267,12 @@ function useAsyncBatch(operations, config = {}) {
     commandQueueRef.current = new CommandQueueManager(dispatch, concurrency);
     commandQueueRef.current.updateQueue(dataState.commandQueue);
   }
+  useEffect(() => {
+    return () => {
+      var _a;
+      (_a = commandQueueRef.current) == null ? void 0 : _a.destroy();
+    };
+  }, []);
   const executeOperation = useCallback(async (operation, retryAttempt = 0) => {
     var _a, _b;
     const absoluteXPath = combineXPaths(dataState.xpath, operation.xpath);
@@ -2550,8 +2582,20 @@ function useInvalidation() {
   if (!dataState || !dispatch) {
     throw new Error("useInvalidation must be used within a DataProvider");
   }
-  const commandQueueManager = new CommandQueueManager(dispatch);
-  commandQueueManager.updateQueue(dataState.commandQueue);
+  const commandQueueRef = useRef();
+  if (!commandQueueRef.current) {
+    commandQueueRef.current = new CommandQueueManager(dispatch);
+  }
+  useEffect(() => {
+    var _a;
+    (_a = commandQueueRef.current) == null ? void 0 : _a.updateQueue(dataState.commandQueue);
+  }, [dataState.commandQueue]);
+  useEffect(() => {
+    return () => {
+      var _a;
+      (_a = commandQueueRef.current) == null ? void 0 : _a.destroy();
+    };
+  }, []);
   const invalidate = useCallback((xpath, config = {}) => {
     const {
       includeChildren = false,
@@ -2580,8 +2624,9 @@ function useInvalidation() {
       }
     }
     pathsToInvalidate.forEach((path) => {
+      var _a;
       const asyncState = dataState.asyncStates[path];
-      commandQueueManager.cancelByXPath(path);
+      (_a = commandQueueRef.current) == null ? void 0 : _a.cancelByXPath(path);
       if (asyncState) {
         dispatch({
           type: "ASYNC_CANCEL",
@@ -2602,7 +2647,7 @@ function useInvalidation() {
         });
       }
     });
-  }, [dataState, dispatch, commandQueueManager]);
+  }, [dataState, dispatch]);
   const invalidateMany = useCallback((xpaths, config = {}) => {
     xpaths.forEach((xpath) => invalidate(xpath, config));
   }, [invalidate]);

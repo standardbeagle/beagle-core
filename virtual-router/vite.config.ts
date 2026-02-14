@@ -9,17 +9,30 @@ export default defineConfig({
   build: {
     sourcemap: true,
     lib: {
-      entry: path.resolve(__dirname, 'src/index.tsx'),
-      name: '@standardbeagle/virtual-router',
-      formats: ['es', 'umd'],
-      fileName: (format) => `index.${format}.${( format ==='umd' ? "c" : "")}js`,
+      entry: {
+        index: path.resolve(__dirname, 'src/index.tsx'),
+        'connectors/react-router': path.resolve(__dirname, 'src/connectors/react-router.tsx'),
+        'connectors/nextjs': path.resolve(__dirname, 'src/connectors/nextjs.tsx'),
+        'connectors/tanstack': path.resolve(__dirname, 'src/connectors/tanstack.tsx'),
+      },
+      formats: ['es'],
+      fileName: (format, entryName) => `${entryName}.${format}.js`,
     },
     rollupOptions: {
-      external: ['react', 'react-dom'],
+      external: [
+        'react',
+        'react-dom',
+        'react-router-dom',
+        'next/navigation',
+        '@tanstack/react-router',
+      ],
       output: {
         globals: {
           react: 'React',
           'react-dom': 'ReactDOM',
+          'react-router-dom': 'ReactRouterDOM',
+          'next/navigation': 'NextNavigation',
+          '@tanstack/react-router': 'TanStackRouter',
         },
       },
     },

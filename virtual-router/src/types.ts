@@ -33,7 +33,12 @@ export type ForwardAction = {
     readonly payload: number;
 };
 
-export type RouterAction = NavigateAction | BackAction | ForwardAction;
+export type SyncAction = {
+    readonly type: 'SYNC';
+    readonly payload: string;
+};
+
+export type RouterAction = NavigateAction | BackAction | ForwardAction | SyncAction;
 
 export interface Action<T> {
     readonly type: string;
