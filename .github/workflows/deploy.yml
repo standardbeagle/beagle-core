@@ -38,7 +38,8 @@ jobs:
       - name: Build with VitePress
         run: |
           npm run docs:build
-          touch virtual-router/docs/.vitepress/dist/.nojekyll
+          touch docs/.vitepress/dist/.nojekyll
+        working-directory: virtual-router
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
