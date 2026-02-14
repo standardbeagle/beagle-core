@@ -4,16 +4,6 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
-    inputs:
-      package:
-        description: 'Package to publish'
-        required: true
-        type: choice
-        options:
-          - both
-          - virtual-router
-          - data-router
 
 jobs:
   publish:
@@ -30,24 +20,20 @@ jobs:
       - run: npm ci
 
       - name: Build virtual-router
-        if: github.event_name == 'push' || inputs.package == 'both' || inputs.package == 'virtual-router'
         run: npm run build
         working-directory: virtual-router
 
       - name: Build data-router
-        if: github.event_name == 'push' || inputs.package == 'both' || inputs.package == 'data-router'
         run: npm run build
         working-directory: data-router
 
       - name: Publish virtual-router
-        if: github.event_name == 'push' || inputs.package == 'both' || inputs.package == 'virtual-router'
         run: npm publish --access public
         working-directory: virtual-router
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish data-router
-        if: github.event_name == 'push' || inputs.package == 'both' || inputs.package == 'data-router'
         run: npm publish --access public
         working-directory: data-router
         env:
