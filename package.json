@@ -11,6 +11,8 @@
   "license": "ISC",
   "workspaces": [
     "virtual-router",
-    "virtual-router/examples/*"
+    "virtual-router/examples/*",
+    "data-router",
+    "integration-tests"
   ]
 }

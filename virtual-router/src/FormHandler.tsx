@@ -2,7 +2,7 @@ import { FormEvent, ReactNode } from 'react';
 import { useNavigate, useSearchParams } from './index';
 
 interface FormData {
-  [key: string]: string | string[] | File | File[];
+  [key: string]: string | File | (string | File)[];
 }
 
 interface FormHandlerProps {
@@ -38,7 +38,7 @@ export function Form({
         if (Array.isArray(data[key])) {
           (data[key] as (string | File)[]).push(value as string | File);
         } else {
-          data[key] = [data[key] as string | File, value as string | File];
+          data[key] = [data[key], value] as (string | File)[];
         }
       } else {
         data[key] = value as string | File;
