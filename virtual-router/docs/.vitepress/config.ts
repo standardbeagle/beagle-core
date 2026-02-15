@@ -2,34 +2,36 @@ import { defineConfig } from 'vitepress'
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
-  title: "Virtual Path Docs",
-  description: "How to use Virtual Path",
+  title: "Virtual Router",
+  description: "Memory-only, hook-based routing for React",
   base: '/beagle-core/',
   themeConfig: {
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Getting Started', link: '/getting-started' },
-      { text: 'Documentation', link: '/api-docs' }
+      { text: 'API', link: '/api-docs' },
+      { text: 'Connectors', link: '/connectors' }
     ],
 
     sidebar: [
       {
-        text: 'How To',
+        text: 'Guide',
         items: [
           { text: 'Getting Started', link: '/getting-started' },
-          { text: 'Runtime API Examples', link: '/api-examples' }
         ]
       },
       {
-        text: 'Documentation',
+        text: 'API Reference',
         items: [
-          { text: 'API Reference', link: '/api-docs' }
+          { text: 'Hooks', link: '/api-docs' },
+          { text: 'Components', link: '/api-docs#components' },
+          { text: 'Connectors', link: '/connectors' }
         ]
       }
     ],
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/standardbeagle/beagle-core/virtual-router' }
+      { icon: 'github', link: 'https://github.com/standardbeagle/beagle-core' }
     ]
   }
 })
