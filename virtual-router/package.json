@@ -1,7 +1,7 @@
 {
   "name": "@standardbeagle/virtual-router",
   "private": false,
-  "version": "1.1.0",
+  "version": "1.2.0",
   "type": "module",
   "files": [
     "/dist"
@@ -79,8 +79,14 @@
     "@tanstack/react-router": ">=1"
   },
   "peerDependenciesMeta": {
-    "react-router-dom": { "optional": true },
-    "next": { "optional": true },
-    "@tanstack/react-router": { "optional": true }
+    "react-router-dom": {
+      "optional": true
+    },
+    "next": {
+      "optional": true
+    },
+    "@tanstack/react-router": {
+      "optional": true
+    }
   }
 }
