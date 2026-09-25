@@ -6,6 +6,11 @@ export default defineConfig({
   description: "Memory-only, hook-based routing for React",
   base: '/beagle-core/',
 
+  // Google-only removal (2026-09-25): the whole dev host is disowned from
+  // Google; Bingbot ignores the googlebot name and indexes normally. The
+  // transformPageData canonical push below is per-page — this stays global.
+  head: [['meta', { name: 'googlebot', content: 'noindex, follow' }]],
+
   // VitePress ships no canonical tag, and this site answers on both
   // /getting-started and /getting-started.html. Internal links all use the
   // .html form, so that is the one the canonical names.
