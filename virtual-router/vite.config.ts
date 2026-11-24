@@ -11,9 +11,11 @@ export default defineConfig({
     lib: {
       entry: {
         index: path.resolve(__dirname, 'src/index.tsx'),
+        'connectors/url': path.resolve(__dirname, 'src/connectors/url.tsx'),
         'connectors/react-router': path.resolve(__dirname, 'src/connectors/react-router.tsx'),
         'connectors/nextjs': path.resolve(__dirname, 'src/connectors/nextjs.tsx'),
         'connectors/tanstack': path.resolve(__dirname, 'src/connectors/tanstack.tsx'),
+        'connectors/wouter': path.resolve(__dirname, 'src/connectors/wouter.tsx'),
       },
       formats: ['es'],
       fileName: (format, entryName) => `${entryName}.${format}.js`,
@@ -25,6 +27,7 @@ export default defineConfig({
         'react-router-dom',
         'next/navigation',
         '@tanstack/react-router',
+        'wouter',
       ],
       output: {
         globals: {
@@ -33,6 +36,7 @@ export default defineConfig({
           'react-router-dom': 'ReactRouterDOM',
           'next/navigation': 'NextNavigation',
           '@tanstack/react-router': 'TanStackRouter',
+          wouter: 'Wouter',
         },
       },
     },

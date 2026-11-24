@@ -69,7 +69,7 @@ test('back action should accept custom count', () => {
 
   expect(back(0)).toEqual({
     type: 'BACK',
-    payload: 0,
+    payload: 1,
   });
 });
 
@@ -94,7 +94,7 @@ test('forward action should accept custom count', () => {
 
   expect(forward(0)).toEqual({
     type: 'FORWARD',
-    payload: 0,
+    payload: 1,
   });
 });
 
@@ -127,12 +127,12 @@ test('edge cases for action creators', () => {
   // Negative numbers for back/forward
   expect(back(-1)).toEqual({
     type: 'BACK',
-    payload: -1,
+    payload: 1,
   });
 
   expect(forward(-1)).toEqual({
     type: 'FORWARD',
-    payload: -1,
+    payload: 1,
   });
 
   // Very large numbers

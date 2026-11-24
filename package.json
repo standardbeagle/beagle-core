@@ -15,7 +15,6 @@
   "workspaces": [
     "virtual-router",
     "virtual-router/examples/*",
-    "data-router",
     "integration-tests"
   ]
 }

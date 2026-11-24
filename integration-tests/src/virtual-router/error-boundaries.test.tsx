@@ -28,7 +28,7 @@ function NavigateButton({ to, label }: { to: string; label: string }) {
   );
 }
 
-function ThrowingComponent({ message }: { message: string }) {
+function ThrowingComponent({ message }: { message: string }): JSX.Element {
   throw new Error(message);
 }
 

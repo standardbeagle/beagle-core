@@ -1,6 +1,6 @@
 import React from 'react';
 import type { ComponentProps } from 'react';
-import { useContext, forwardRef, Children, isValidElement } from 'react';
+import { useCallback, useContext, forwardRef, Children, isValidElement } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 import type { NavContext, RouteParams, SearchParams, NavigationObject } from './types.ts';
 import { combineRoutes } from './state/combineRoutes.ts';
@@ -38,7 +38,7 @@ export function useNavigate(): (url: string) => void {
     if (!dispatch) {
         throw new Error('useNavigate must be used within a PathProvider');
     }
-    return (path: string) => dispatch(navigate(path));
+    return useCallback((path: string) => dispatch(navigate(path)), [dispatch]);
 }
 
 export function useNavigation(): NavigationObject {
@@ -53,8 +53,8 @@ export function useNavigation(): NavigationObject {
         navigate: (path: string) => dispatch(navigate(path)),
         back: (count: number = 1) => dispatch(back(count)),
         forward: (count: number = 1) => dispatch(forward(count)),
-        hasBack: pathState.location < pathState.history.length,
-        hasForward: pathState.location > 0,
+        hasBack: pathState.history.length > 0,
+        hasForward: Boolean(pathState.future?.length),
         path: pathState.path,
         history: pathState.history,
         location: pathState.location,
@@ -163,6 +163,8 @@ function flattenActiveRoutes(result: RouteRenderData[], children: ReactNode, bas
             flattenActiveRoutes(result, element.props.children, base, path);
             return;
         }
+
+        if (element.type !== Route) return;
 
         const elementRoute = combineRoutes(base, element.props.path);
         const match = matchPath(elementRoute, path);

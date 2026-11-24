@@ -82,8 +82,9 @@ test('BACK action should navigate to previous page', () => {
 
   expect(newState).toEqual({
     path: '/previous',  // Fixed: now correctly goes to history[0] (1 step back)
-    history: ['/previous', '/older'],
+    history: ['/older'],
     location: 1,  // Location 1 means 1 step back
+    future: ['/current'],
   });
 });
 
@@ -98,8 +99,9 @@ test('BACK action should navigate multiple steps back', () => {
 
   expect(newState).toEqual({
     path: '/page2',  // Fixed: back(2) goes to history[1] (2 steps back)
-    history: ['/page1', '/page2', '/page3'],
+    history: ['/page3'],
     location: 2,  // Location 2 means 2 steps back
+    future: ['/page1', '/current'],
   });
 });
 
@@ -127,33 +129,41 @@ test('BACK action should not exceed history bounds', () => {
   expect(newState).toBe(state);
 });
 
-test('FORWARD action should not work when going to unknown current state', () => {
+test('FORWARD action should restore the next future page', () => {
   const state = {
     path: '/previous',
-    history: ['/previous', '/current'],
+    history: ['/older'],
     location: 1,
+    future: ['/current'],
   };
   const action = forward();
   const newState = reducer(state, action);
 
-  // Forward to location 0 is not supported due to design limitation
-  expect(newState).toBe(state);
+  expect(newState).toEqual({
+    path: '/current',
+    history: ['/previous', '/older'],
+    location: 0,
+  });
 });
 
-test('FORWARD action should not work when going to unknown current state (multi-step)', () => {
+test('FORWARD action should restore multiple future pages', () => {
   const state = {
-    path: '/page3',
-    history: ['/page1', '/page2', '/page3', '/page4'],
+    path: '/page2',
+    history: ['/page3', '/page4'],
     location: 2,
+    future: ['/page1', '/current'],
   };
   const action = forward(2);
   const newState = reducer(state, action);
 
-  // Forward to location 0 is not supported due to design limitation
-  expect(newState).toBe(state);
+  expect(newState).toEqual({
+    path: '/current',
+    history: ['/page1', '/page2', '/page3', '/page4'],
+    location: 0,
+  });
 });
 
-test('FORWARD action should work when not going to location 0', () => {
+test('FORWARD action should not change state without future entries', () => {
   const state = {
     path: '/page3',
     history: ['/page1', '/page2', '/page3'],
@@ -162,11 +172,7 @@ test('FORWARD action should work when not going to location 0', () => {
   const action = forward(1);
   const newState = reducer(state, action);
 
-  expect(newState).toEqual({
-    path: '/page2',  // Forward 1 step: from location 3 to location 2, which is history[1]
-    history: ['/page1', '/page2', '/page3'],
-    location: 2,
-  });
+  expect(newState).toBe(state);
 });
 
 test('FORWARD action should not change state if at latest page', () => {
@@ -211,23 +217,23 @@ test('Complex navigation scenario', () => {
   state = reducer(state, back(2));
   expect(state).toEqual({
     path: '/home',  // Fixed: back(2) from location 0 goes to history[1] (2nd step back)
-    history: ['/about', '/home', '/'],
+    history: ['/'],
     location: 2,  // Location 2 means we're 2 steps back
+    future: ['/about', '/contact'],
   });
 
   // Navigate from history position (should trim future)
   state = reducer(state, navigate('/new-page'));
   expect(state).toEqual({
     path: '/new-page',
-    history: ['/home', '/about'],  // Fixed: trims from location 2, keeping first 2-1=1 items from history[1]
+    history: ['/home', '/'],
     location: 0,
   });
 
   // Go back 
   state = reducer(state, back());
   expect(state.path).toBe('/home');
-  // Note: Forward functionality has limitations when navigating from history positions
-  // since the "current" path is lost when navigating from a history state
+  // Future history is cleared after a new navigation from a history position.
 });
 
 test('Navigate to same path should not change state', () => {

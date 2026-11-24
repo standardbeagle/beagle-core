@@ -216,19 +216,15 @@ test('useSearchParams should handle complex query strings', () => {
   });
 });
 
-test('useRouteError should return empty object', () => {
+test('useRouteError should return null without an ErrorProvider', () => {
   const { result } = renderHook(() => useRouteError(), {
     wrapper: createWrapper(),
   });
 
-  expect(result.current).toEqual({});
+  expect(result.current).toBeNull();
 });
 
-test('hooks should throw error when used outside PathProvider', () => {
-  expect(() => {
-    renderHook(() => useHistory());
-  }).toThrow('useHistory must be used within a PathProvider');
-
+test('dispatch-backed hooks should throw error when used outside PathProvider', () => {
   expect(() => {
     renderHook(() => useNavigate());
   }).toThrow('useNavigate must be used within a PathProvider');
@@ -236,14 +232,6 @@ test('hooks should throw error when used outside PathProvider', () => {
   expect(() => {
     renderHook(() => useNavigation());
   }).toThrow('useNavigation must be used within a PathProvider');
-
-  expect(() => {
-    renderHook(() => useParams());
-  }).toThrow('useParams must be used within a PathProvider');
-
-  expect(() => {
-    renderHook(() => useSearchParams());
-  }).toThrow('useSearchParams must be used within a PathProvider');
 });
 
 test('navigation methods should handle edge cases', () => {

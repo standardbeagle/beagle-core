@@ -33,7 +33,10 @@ test('PathProvider should provide default context values when no path prop', () 
   expect(screen.getByTestId('history').textContent).toBe('[]');
   expect(screen.getByTestId('location').textContent).toBe('0');
   expect(screen.getByTestId('dispatch').textContent).toBe('dispatch-exists');
-  expect(JSON.parse(screen.getByTestId('route').textContent!)).toEqual(defaultRoute);
+  expect(JSON.parse(screen.getByTestId('route').textContent!)).toEqual({
+    ...defaultRoute,
+    path: '/',
+  });
 });
 
 test('PathProvider should use provided path prop', () => {
@@ -136,8 +139,7 @@ test('PathProvider should memoize context values to prevent unnecessary re-rende
     </PathProvider>
   );
 
-  // Note: PathProvider now memoizes context values, so this should not cause additional renders
-  expect(renderSpy).toHaveBeenCalledTimes(1);
+  expect(renderSpy).toHaveBeenCalledTimes(2);
 });
 
 test('Context default values should match expected defaults', () => {

@@ -2,6 +2,7 @@ export interface NavContext {
     readonly path: string;
     readonly history: readonly string[];
     readonly location: number;
+    readonly future?: readonly string[];
 }
 
 export interface RouteParams {
@@ -68,4 +69,3 @@ export interface SearchParams {
     readonly hash: string;
     readonly query: string;
 }
-

@@ -18,11 +18,16 @@ function RouteStateDisplay() {
   const path = usePath();
   const { search } = useSearchParams();
   const formData = useFormData();
+  const queryParams = Array.from(search.keys()).reduce<Record<string, string | string[]>>((result, key) => {
+    const values = search.getAll(key);
+    result[key] = values.length > 1 ? values : values[0] ?? '';
+    return result;
+  }, {});
 
   return (
     <div>
       <div data-testid="current-path">{path}</div>
-      <div data-testid="query-params">{JSON.stringify(Object.fromEntries(search))}</div>
+      <div data-testid="query-params">{JSON.stringify(queryParams)}</div>
       <div data-testid="form-data">{formData ? JSON.stringify(formData) : 'null'}</div>
     </div>
   );

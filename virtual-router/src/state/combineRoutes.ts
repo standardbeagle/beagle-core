@@ -1,5 +1,7 @@
 export const combineRoutes = (base: string, child: string): string => {
-    if (!base || !child) return base ?? child ?? "";
+    if (!child) return base || "";
+    if (child.startsWith('/')) return child;
+    if (!base) return child;
 
     const baseSegments = base.split('/').filter(s => s !== "");
     const childSegments = child.split('/').filter(s => s !== "");
@@ -8,4 +10,3 @@ export const combineRoutes = (base: string, child: string): string => {
         return `/${childSegments.join('/')}`;
     return `/${baseSegments.join('/')}/${childSegments.join('/')}`;
 }
-

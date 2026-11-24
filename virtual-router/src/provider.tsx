@@ -66,7 +66,7 @@ export function PathProvider({ path, children, basePath = '/', externalPath, onC
     }, [state.path, onChange, basePath]);
 
     // Memoize context values to prevent unnecessary re-renders
-    const pathContextValue = useMemo(() => state, [state.path, state.history, state.location]);
+    const pathContextValue = useMemo(() => state, [state.path, state.history, state.location, state.future]);
     const dispatchContextValue = useMemo(() => dispatch, [dispatch]);
     const routeContextValue = useMemo(() => {
         // Parse the current path to extract query, hash, etc.

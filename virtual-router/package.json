@@ -13,6 +13,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.es.js"
     },
+    "./connectors/url": {
+      "types": "./dist/connectors/url.d.ts",
+      "default": "./dist/connectors/url.es.js"
+    },
     "./connectors/react-router": {
       "types": "./dist/connectors/react-router.d.ts",
       "default": "./dist/connectors/react-router.es.js"
@@ -24,6 +28,10 @@
     "./connectors/tanstack": {
       "types": "./dist/connectors/tanstack.d.ts",
       "default": "./dist/connectors/tanstack.es.js"
+    },
+    "./connectors/wouter": {
+      "types": "./dist/connectors/wouter.d.ts",
+      "default": "./dist/connectors/wouter.es.js"
     }
   },
   "repository": {
@@ -76,7 +84,8 @@
     "react-dom": "^18.2.0",
     "react-router-dom": ">=6",
     "next": ">=13",
-    "@tanstack/react-router": ">=1"
+    "@tanstack/react-router": ">=1",
+    "wouter": ">=3"
   },
   "peerDependenciesMeta": {
     "react-router-dom": {
@@ -86,6 +95,9 @@
       "optional": true
     },
     "@tanstack/react-router": {
+      "optional": true
+    },
+    "wouter": {
       "optional": true
     }
   }

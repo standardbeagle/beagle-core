@@ -8,19 +8,15 @@ export const defaultRoute: RouteContextData = { routePath: '*', data: {}, hash: 
 
 export const reducer = handleActions({
     NAVIGATE: (state: NavContext, action: Action<any>): NavContext => {
-        let { history, location } = state;
-        
-        // If we're not at the latest position, trim future history
-        if (location > 0) {
-            history = history.slice(0, history.length - location);
-        }
-        
         const newPath = combinePaths(state.path, action.payload);
         
-        // Don't add to history if navigating to the same path
         if (newPath === state.path) {
             return state;
         }
+
+        const history = state.location > 0 && !state.future?.length
+            ? state.history.slice(0, Math.max(0, state.location - 1))
+            : state.history;
         
         return {
             path: newPath,
@@ -30,56 +26,46 @@ export const reducer = handleActions({
     },
     BACK: (state: NavContext, action: Action<any>): NavContext => {
         const steps = Math.max(1, action.payload); // Ensure at least 1 step
-        const targetLocation = state.location + steps;
+        const past = state.history.slice(0, steps);
         
-        // Check bounds - can't go back beyond available history
-        if (targetLocation > state.history.length) {
+        if (past.length < steps) {
             return state;
         }
         
-        // targetLocation represents steps back, so history index is targetLocation - 1
-        const historyIndex = targetLocation - 1;
-        const newPath = state.history[historyIndex];
+        const newPath = past[past.length - 1];
         if (!newPath) {
             return state;
         }
+
+        const intermediateFuture = past.slice(0, -1).reverse();
         
         return {
             path: newPath,
-            history: state.history,
-            location: targetLocation
+            history: state.history.slice(steps),
+            location: state.location + steps,
+            future: [...intermediateFuture, state.path, ...(state.future ?? [])],
         }
     },
     FORWARD: (state: NavContext, action: Action<any>): NavContext => {
         const steps = Math.max(1, action.payload); // Ensure at least 1 step
-        const targetLocation = state.location - steps;
-
-        // Check bounds - can't go forward beyond current position (location 0)
-        if (targetLocation < 0) {
+        const future = state.future ?? [];
+        const next = future.slice(0, steps);
+        
+        if (next.length < steps) {
             return state;
         }
-
-        // If target location is 0, we're going back to the "current" position
-        // But since we don't track the current path separately, this is problematic
-        // The original implementation likely had this same issue
-        // For now, let's implement basic forward functionality
-
-        if (targetLocation === 0) {
-            // Going back to current position - but we don't know what the current path should be
-            // This is a fundamental limitation of the current design
-            return state; // Cannot go forward to unknown current state
-        }
-
-        const historyIndex = targetLocation - 1;
-        const newPath = state.history[historyIndex];
+        
+        const newPath = next[next.length - 1];
         if (!newPath) {
             return state;
         }
 
+        const remainingFuture = future.slice(steps);
         return {
             path: newPath,
-            history: state.history,
-            location: targetLocation
+            history: [...next.slice(0, -1).reverse(), state.path, ...state.history],
+            location: Math.max(0, state.location - steps),
+            ...(remainingFuture.length ? { future: remainingFuture } : {}),
         }
     },
     SYNC: (state: NavContext, action: Action<any>): NavContext => {
@@ -90,10 +76,10 @@ export const reducer = handleActions({
         return {
             path: newPath,
             history: state.history,
-            location: state.location
+            location: state.location,
+            ...(state.future?.length ? { future: state.future } : {}),
         };
     }
 },
     defaultState
 )
-

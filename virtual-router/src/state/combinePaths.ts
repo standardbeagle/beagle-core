@@ -1,7 +1,13 @@
 export const combinePaths = (current: string, newPath: string): string => {
+    const currentBase = normalizePath((current || '/').split(/[?#]/)[0]);
+
     // Handle empty or undefined paths
     if (!newPath || newPath === '') {
-        return current || '/';
+        return currentBase;
+    }
+
+    if (newPath.startsWith('?') || newPath.startsWith('#')) {
+        return `${currentBase}${newPath}`;
     }
     
     // If new path is absolute, return it directly (after normalizing)
@@ -9,8 +15,6 @@ export const combinePaths = (current: string, newPath: string): string => {
         return normalizePath(newPath);
     }
     
-    // Extract base path (remove query params and hash)
-    const [currentBase] = (current || '/').split(/[?#]/);
     return mergePaths(currentBase, newPath);
 }
 

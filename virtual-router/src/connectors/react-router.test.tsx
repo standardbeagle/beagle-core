@@ -7,9 +7,11 @@ import { navigate } from '../state/actions';
 // Mock react-router-dom
 const mockNavigate = vi.fn();
 let mockPathname = '/widgets/dashboard';
+let mockSearch = '';
+let mockHash = '';
 
 vi.mock('react-router-dom', () => ({
-    useLocation: () => ({ pathname: mockPathname }),
+    useLocation: () => ({ pathname: mockPathname, search: mockSearch, hash: mockHash }),
     useNavigate: () => mockNavigate,
 }));
 
@@ -78,4 +80,23 @@ test('ReactRouterConnector handles root basePath', () => {
     expect(screen.getByTestId('path').textContent).toBe('/dashboard');
     unmount();
     mockPathname = '/widgets/dashboard';
+});
+
+test('ReactRouterConnector preserves query string and hash from external router', () => {
+    mockPathname = '/widgets/search';
+    mockSearch = '?q=test';
+    mockHash = '#results';
+
+    const { unmount } = render(
+        <ReactRouterConnector basePath="/widgets">
+            <TestChild />
+        </ReactRouterConnector>
+    );
+
+    expect(screen.getByTestId('path').textContent).toBe('/search?q=test#results');
+
+    unmount();
+    mockPathname = '/widgets/dashboard';
+    mockSearch = '';
+    mockHash = '';
 });

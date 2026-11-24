@@ -1,10 +1,12 @@
 import { useCallback } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { PathProvider } from '../provider';
 import type { ConnectorProps } from './types';
+import { buildPath } from './types';
 
-export function NextRouterConnector({ basePath, children, path }: ConnectorProps) {
+export function NextRouterConnector({ basePath = '/', children, path }: ConnectorProps) {
     const pathname = usePathname();
+    const searchParams = useSearchParams();
     const router = useRouter();
 
     const handleChange = useCallback((newPath: string) => {
@@ -15,7 +17,7 @@ export function NextRouterConnector({ basePath, children, path }: ConnectorProps
         <PathProvider
             path={path ?? '/'}
             basePath={basePath}
-            externalPath={pathname}
+            externalPath={buildPath(pathname, searchParams.toString())}
             onChange={handleChange}
         >
             {children}

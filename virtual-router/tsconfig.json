@@ -21,6 +21,13 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/connectors/react-router.tsx", "src/connectors/nextjs.tsx", "src/connectors/tanstack.tsx"],
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/connectors/react-router.tsx",
+    "src/connectors/nextjs.tsx",
+    "src/connectors/tanstack.tsx",
+    "src/connectors/wouter.tsx"
+  ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

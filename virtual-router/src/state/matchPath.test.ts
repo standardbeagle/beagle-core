@@ -99,7 +99,7 @@ test('star route matches empty string', () => {
     expect(match.remainder).toBe('');
     expect(match.query).toBe('');
     expect(match.hash).toBe('');
-    expect(match.path).toBe('');
+    expect(match.path).toBe('/');
 });
 
 test('should match path /* with /a', () => {
